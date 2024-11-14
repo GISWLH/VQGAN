@@ -26,20 +26,20 @@ class ResidualBlock(nn.Module):
         self.block = nn.Sequential(
             GroupNorm(in_channels),
             Swish(),
-            nn.Conv2d(in_channels, out_channels, 3, 1, 1),
+            nn.Conv3d(in_channels, out_channels, 3, 1, 1),
             GroupNorm(out_channels),
             Swish(),
-            nn.Conv2d(out_channels, out_channels, 3, 1, 1)
+            nn.Conv3d(out_channels, out_channels, 3, 1, 1)
         )
 
         if in_channels != out_channels:
-            self.channel_up = nn.Conv2d(in_channels, out_channels, 1, 1, 0)
+            self.channel_up = nn.Conv3d(in_channels, out_channels, 1, 1, 0)
 
     def forward(self, x):
         
         if self.in_channels != self.out_channels:
             x1 = self.channel_up(x)
-            print(x1.shape, 'x1')
+
             return self.channel_up(x)# + self.block(x)
         else:
             return x + self.block(x)
@@ -48,17 +48,20 @@ class ResidualBlock(nn.Module):
 class UpSampleBlock(nn.Module):
     def __init__(self, channels):
         super(UpSampleBlock, self).__init__()
-        self.conv = nn.Conv2d(channels, channels, 3, 1, 1)
+        self.conv = nn.Conv3d(channels, channels, kernel_size=(1, 3, 3), stride=1,padding=(0, 1, 1))
 
     def forward(self, x):
-        x = F.interpolate(x, scale_factor=2.0)
+        print(x.shape, 'before inter')
+        x = F.interpolate(x, scale_factor=(1, 2, 2))
+        print(x.shape, 'after inter')
+        print(self.conv(x).shape, 'after conv')
         return self.conv(x)
 
 
 class DownSampleBlock(nn.Module):
     def __init__(self, channels):
         super(DownSampleBlock, self).__init__()
-        self.conv = nn.Conv2d(channels, channels, 3, 2, 0)
+        self.conv = nn.Conv3d(channels, channels, (1, 3, 3), 2, 0)
 
     def forward(self, x):
         pad = (0, 1, 0, 1)
