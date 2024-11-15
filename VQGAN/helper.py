@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from .conv import Conv4d, ConvTranspose4d
 
 
 class GroupNorm(nn.Module):
@@ -43,29 +44,74 @@ class ResidualBlock(nn.Module):
             return self.channel_up(x)# + self.block(x)
         else:
             return x + self.block(x)
+        
+class ResidualBlock4D(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(ResidualBlock4D, self).__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+
+        self.block = nn.Sequential(
+            GroupNorm(in_channels),
+            Swish(),
+            Conv4d(in_channels, out_channels, 3, 1, 1),
+            GroupNorm(out_channels),
+            Swish(),
+            Conv4d(out_channels, out_channels, 3, 1, 1)
+        )
+
+        if in_channels != out_channels:
+            self.channel_up = Conv4d(in_channels, out_channels, 1, 1, 0)
+
+    def forward(self, x):
+        
+        if self.in_channels != self.out_channels:
+            x1 = self.channel_up(x)
+
+            return self.channel_up(x)# + self.block(x)
+        else:
+            return x + self.block(x)
 
 
 class UpSampleBlock(nn.Module):
     def __init__(self, channels):
         super(UpSampleBlock, self).__init__()
         self.conv = nn.Conv3d(channels, channels, kernel_size=(1, 3, 3), stride=1,padding=(0, 1, 1))
-
+        
     def forward(self, x):
-        print(x.shape, 'before inter')
-        x = F.interpolate(x, scale_factor=(1, 2, 2))
-        print(x.shape, 'after inter')
-        print(self.conv(x).shape, 'after conv')
+        x = ConvTranspose4d(x, scale_factor=(1, 2, 2))
         return self.conv(x)
+    
+class UpSampleBlock4D(nn.Module):
+    def __init__(self, channels):
+        super(UpSampleBlock4D, self).__init__()
+        self.conv = Conv4d(channels, channels, kernel_size=(1, 1, 3, 3), stride=(1, 1, 2, 2),padding=(0, 0, 1, 1))
+        self.convTrans = ConvTranspose4d(channels, channels, kernel_size=(2, 1, 2, 2), stride=(2, 1, 2, 2),padding=(0, 0, 1, 1))
+    def forward(self, x):
+        #x = F.interpolate(x, scale_factor=(1, 1, 2, 2))
+        return self.convTrans(x)
 
 
 class DownSampleBlock(nn.Module):
     def __init__(self, channels):
         super(DownSampleBlock, self).__init__()
-        self.conv = nn.Conv3d(channels, channels, (1, 3, 3), 2, 0)
+        self.conv = nn.Conv3d(channels, channels, kernel_size=(1, 3, 3), stride=(1, 2, 2), padding=(0, 1, 1))
 
     def forward(self, x):
         pad = (0, 1, 0, 1)
         x = F.pad(x, pad, mode="constant", value=0)
+        print(x.shape, 'after pad')
+        return self.conv(x)
+    
+class DownSampleBlock4D(nn.Module):
+    def __init__(self, channels):
+        super(DownSampleBlock4D, self).__init__()
+        self.conv = Conv4d(channels, channels, kernel_size=(1, 1, 3, 3), stride=(1, 1, 2, 2), padding=(0, 0, 1, 1))
+
+    def forward(self, x):
+        pad = (0, 1, 0, 1)
+        x = F.pad(x, pad, mode="constant", value=0)
+        print(x.shape, 'after pad')
         return self.conv(x)
 
 
